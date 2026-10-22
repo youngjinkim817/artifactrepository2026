@@ -288,6 +288,19 @@ async function s3PutFile(key, file){
   if(!r.ok) throw new Error('파일 업로드 실패('+r.status+')');
   return true;
 }
+async function s3Delete(key){
+  const r = await fetch(`${BASE}/${encKey(key)}`, {method:'DELETE'});
+  // S3 DELETE는 객체가 없어도 204를 반환(멱등). 403 등만 오류로 처리
+  if(!r.ok && r.status!==404 && r.status!==204){ throw new Error('삭제 실패('+r.status+') — 버킷 DeleteObject 권한/CORS를 확인하세요'); }
+  return true;
+}
+/* 명단 목록에 이름 기반 폴더 접두어 부여(동명이인은 이메일 id로 구분) */
+function assignFolders(list){
+  list.forEach(s=>{ s.folder = folderFromName(s.name, s.id); });
+  const cnt={}; list.forEach(s=>cnt[s.folder]=(cnt[s.folder]||0)+1);
+  list.forEach(s=>{ if(cnt[s.folder]>1) s.folder = s.folder+'_'+s.id; });
+  return list;
+}
 
 /* ---------- 명단 로드 ---------- */
 async function fetchRoster(){
@@ -295,12 +308,7 @@ async function fetchRoster(){
   if(!r) return [];
   const data = await r.json();
   const list = (data.students||data||[]).map(s=>({name:s.name, email:s.email, id:s.id||idFromEmail(s.email)}));
-  // 각 수강생의 폴더명(이름 기반) 부여
-  list.forEach(s=>{ s.folder = folderFromName(s.name, s.id); });
-  // 동명이인은 폴더가 겹치므로 이메일 id를 붙여 구분
-  const cnt={}; list.forEach(s=>cnt[s.folder]=(cnt[s.folder]||0)+1);
-  list.forEach(s=>{ if(cnt[s.folder]>1) s.folder = s.folder+'_'+s.id; });
-  return list;
+  return assignFolders(list);
 }
 
 /* ---------- 로그인 ---------- */
@@ -434,7 +442,33 @@ function addStudent(){
   msg.className='msg ok'; msg.textContent=`${name} 님을 추가했습니다.`;
   renderRosterEditor();
 }
-function removeStudent(i){ EDITING.splice(i,1); renderRosterEditor(); }
+/* 수강생 폴더의 모든 객체(제출물 포함) 삭제 */
+async function deleteStudentFolder(folder){
+  const keys=[`${folder}/submission.json`];
+  // submission.json에서 실제 이미지/파일 키를 읽어 정확히 삭제
+  try{ const r=await s3Get(`${folder}/submission.json`); if(r){ const d=await r.json(); if(d.imageKey) keys.push(d.imageKey); if(d.fileKey) keys.push(d.fileKey); } }catch{}
+  // 혹시 submission.json을 못 읽는 경우 대비해 통상적인 파일명도 추가 시도(멱등)
+  ['png','jpg','jpeg','gif','webp'].forEach(e=>{ const k=`${folder}/screenshot.${e}`; if(!keys.includes(k)) keys.push(k); });
+  const zipK=`${folder}/deliverable.zip`; if(!keys.includes(zipK)) keys.push(zipK);
+  for(const k of keys){ try{ await s3Delete(k); }catch(e){ /* 하나 실패해도 나머지 계속 */ } }
+}
+async function removeStudent(i){
+  const s = EDITING[i]; if(!s) return;
+  let ok=true; try{ ok=confirm(`${s.name} 님을 명단에서 삭제하고, S3의 해당 폴더(제출물 포함)도 삭제합니다.\n이 작업은 되돌릴 수 없습니다. 계속할까요?`); }catch{ ok=true; }
+  if(!ok) return;
+  const msg=$('rosterMsg'); msg.className='msg'; msg.textContent=`${s.name} 님의 폴더를 삭제하는 중…`;
+  try{
+    assignFolders(EDITING);                 // 현재 목록 기준으로 폴더명 확정
+    const folder = EDITING[i].folder;
+    await deleteStudentFolder(folder);       // S3 폴더(객체들) 삭제
+    EDITING.splice(i,1);                     // 메모리 목록에서 제거
+    renderRosterEditor();
+    // roster.json 즉시 갱신(저장)
+    const payload = EDITING.map(x=>({name:x.name, email:x.email, id:x.id||idFromEmail(x.email)}));
+    await s3PutText('roster.json', JSON.stringify({students:payload, updatedAt:new Date().toISOString()}, null, 2), 'application/json');
+    msg.className='msg ok'; msg.textContent=`${s.name} 님을 삭제했습니다 — 명단과 S3 폴더("${folder}/")가 모두 삭제되었습니다.`;
+  }catch(e){ msg.className='msg err'; msg.textContent='삭제 중 오류: '+e.message; renderRosterEditor(); }
+}
 async function saveRoster(){
   const msg=$('rosterMsg'); msg.className='msg';
   if(EDITING.length===0){ msg.className='msg err'; msg.textContent='먼저 수강생을 추가하세요.'; return; }
