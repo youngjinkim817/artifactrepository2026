@@ -492,8 +492,17 @@ function renderRosterEditor(){
     return `<div class="ritem">
       <div class="ri-tx"><b>${esc(s.name)}</b><span>${esc(s.email)}</span></div>
       <div class="ri-act">${badge}
+        <button class="rowbtn" onclick="toggleEdit(${i})" title="이름·이메일 수정">정보 수정</button>
         <button class="rowbtn" onclick="toggleCred(${i})">AWS 키</button>
         <button class="ri-x" onclick="removeStudent(${i})" title="삭제">&times;</button>
+      </div>
+    </div>
+    <div class="crededit hide" id="ed${i}">
+      <div class="fld"><label>이름</label><input id="ed_nm${i}" type="text" value="${esc(s.name||'')}" placeholder="홍길동"></div>
+      <div class="fld"><label>이메일</label><input id="ed_em${i}" type="email" value="${esc(s.email||'')}" placeholder="hong@example.com"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="saveEdit(${i})">정보 반영</button>
+        <button class="btn btn-ghost" onclick="toggleEdit(${i})">취소</button>
       </div>
     </div>
     <div class="crededit hide" id="ce${i}">
@@ -505,6 +514,22 @@ function renderRosterEditor(){
   }).join('');
 }
 function toggleCred(i){ const el=$('ce'+i); if(el) el.classList.toggle('hide'); }
+function toggleEdit(i){ const el=$('ed'+i); if(el) el.classList.toggle('hide'); }
+function saveEdit(i){
+  const nm=($('ed_nm'+i).value||'').trim(), em=($('ed_em'+i).value||'').trim().toLowerCase();
+  const msg=$('rosterMsg'); msg.className='msg';
+  if(!nm||!em){ msg.className='msg err'; msg.textContent='이름과 이메일을 모두 입력하세요.'; return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ msg.className='msg err'; msg.textContent='이메일 형식이 올바르지 않습니다.'; return; }
+  if(EDITING.some((s,idx)=>idx!==i && s.email===em)){ msg.className='msg err'; msg.textContent='이미 사용 중인 이메일입니다.'; return; }
+  const oldEmail = EDITING[i].email;
+  EDITING[i].name = nm;
+  EDITING[i].email = em;
+  EDITING[i].id = idFromEmail(em);
+  renderRosterEditor();
+  msg.className='msg ok';
+  const emailChanged = oldEmail!==em;
+  msg.textContent = `${nm} 님 정보를 수정했습니다.${emailChanged?' (이메일 변경 — 저장 후 반영됩니다)':''} 아래 "명단 저장"을 눌러야 최종 저장됩니다.`;
+}
 function saveCred(i){
   const ak=$('ce_ak'+i).value.trim(), sk=$('ce_sk'+i).value.trim(), st=$('ce_st'+i).value.trim();
   EDITING[i].creds = ak? {accessKeyId:ak, secretAccessKey:sk, sessionToken:st} : null;
