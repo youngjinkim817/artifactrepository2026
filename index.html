@@ -121,6 +121,34 @@ input[type=file]{width:100%;font-size:13px;padding:9px;border:1px dashed var(--l
 .ri-tx span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ri-x{flex:none;background:none;border:0;font-size:19px;line-height:1;color:var(--muted);cursor:pointer;padding:2px 6px;border-radius:6px}
 .ri-x:hover{background:#fee2e2;color:var(--danger)}
+
+/* ===== AWS Access Code ===== */
+.credadd{border-top:1px dashed var(--line);margin-top:12px;padding-top:12px}
+.credadd-h{font-size:12.5px;font-weight:800;color:var(--ink-2);margin-bottom:8px}
+.credadd-h span{font-weight:600;color:var(--muted)}
+.ri-act{display:flex;align-items:center;gap:8px}
+.credtag{font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 8px}
+.credtag.on{color:var(--primary-2);background:#dcfce7;border:1px solid #bbf7d0}
+.credtag.off{color:#94a3b8;background:#f1f5f9;border:1px solid var(--line)}
+.crededit{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0 0 7px}
+.credwrap{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:14px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:18px}
+.credwrap.pend{border-left-color:var(--line)}
+.credhead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.credwrap h3{margin:0;font-size:16px;font-weight:800;color:var(--ink)}
+.credwrap p{margin:5px 0 0;font-size:12.5px;color:var(--muted);line-height:1.6;max-width:640px}
+.credpend{font-style:italic}
+.credact{display:flex;gap:8px;flex-wrap:wrap}
+.credact .btn{padding:8px 13px;font-size:12.5px}
+.credrows{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.credrow{display:flex;align-items:center;gap:10px;background:#0b1020;border-radius:10px;padding:9px 11px 9px 14px}
+.credrow .ck{flex:none;width:200px;font-family:var(--mono,ui-monospace,Menlo,monospace);font-size:12px;font-weight:800;color:#c4b5fd}
+.credrow .cv{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cpbtn{flex:none;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#e2e8f0;font-family:var(--font);font-size:11.5px;font-weight:800;border-radius:7px;padding:5px 12px;cursor:pointer;transition:all .15s}
+.cpbtn:hover{background:rgba(255,255,255,.2);color:#fff}
+@media(max-width:620px){.credrow{flex-wrap:wrap}.credrow .ck{width:100%}}
+.credwarn{margin-top:12px;font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;line-height:1.55}
+.toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);background:#0f172a;color:#fff;font-size:13px;font-weight:700;padding:11px 18px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:all .2s;z-index:300}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
 <body>
@@ -148,10 +176,11 @@ input[type=file]{width:100%;font-size:13px;padding:9px;border:1px dashed var(--l
     </div>
   </div>
   <div class="wrap sec">
+    <div id="credBox"></div>
     <div class="bar">
       <div>
-        <h2>제출 현황</h2>
-        <div class="sub" id="repoSub">명단을 불러오는 중…</div>
+        <h2>내 제출</h2>
+        <div class="sub" id="repoSub">불러오는 중…</div>
       </div>
       <button class="btn btn-ghost" onclick="loadRepo()">새로고침</button>
     </div>
@@ -187,6 +216,12 @@ input[type=file]{width:100%;font-size:13px;padding:9px;border:1px dashed var(--l
         <p>이름과 이메일을 입력하고 추가 버튼을 누르세요. 여러 명을 반복해서 추가할 수 있습니다.</p>
         <div class="fld"><label>이름</label><input id="mName" type="text" placeholder="홍길동" autocomplete="off" onkeydown="if(event.key==='Enter')document.getElementById('mEmail').focus()"></div>
         <div class="fld"><label>이메일</label><input id="mEmail" type="email" placeholder="hong@example.com" autocomplete="off" onkeydown="if(event.key==='Enter')addStudent()"></div>
+        <div class="credadd">
+          <div class="credadd-h">AWS Access Code <span>(선택 — 비워두면 나중에 아래 목록에서 입력)</span></div>
+          <div class="fld"><label>AWS_ACCESS_KEY_ID</label><input id="mAk" type="text" placeholder="ASIA..." autocomplete="off"></div>
+          <div class="fld"><label>AWS_SECRET_ACCESS_KEY</label><input id="mSk" type="text" placeholder="...." autocomplete="off"></div>
+          <div class="fld"><label>AWS_SESSION_TOKEN</label><textarea id="mSt" placeholder="...." style="min-height:64px"></textarea></div>
+        </div>
         <button class="btn btn-primary" onclick="addStudent()">+ 명단에 추가</button>
         <div class="msg" id="addMsg"></div>
       </div>
@@ -200,6 +235,29 @@ input[type=file]{width:100%;font-size:13px;padding:9px;border:1px dashed var(--l
         </div>
         <div class="msg" id="rosterMsg"></div>
       </div>
+    </div>
+
+    <div class="panel" style="margin-top:18px">
+      <div class="bar" style="margin-bottom:10px">
+        <div><h3 style="font-size:16px;margin:0">전체 제출 현황</h3>
+        <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">모든 수강생의 제출물입니다. 담당자 화면에서만 보입니다.</p></div>
+        <button class="btn btn-ghost" onclick="loadAdminRepo()">새로고침</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr>
+            <th style="width:15%">이름</th>
+            <th style="width:12%">AWS 키</th>
+            <th style="width:16%">프로젝트 이름</th>
+            <th style="width:25%">주요 기능 설명</th>
+            <th style="width:12%">스크린샷</th>
+            <th style="width:12%">산출물</th>
+          </tr></thead>
+          <tbody id="adminRepoBody"></tbody>
+        </table>
+        <div class="empty hide" id="adminRepoEmpty"></div>
+      </div>
+      <div id="adminRepoSub" style="font-size:12.5px;color:var(--muted);margin-top:10px"></div>
     </div>
   </div>
 </div>
@@ -252,7 +310,7 @@ input[type=file]{width:100%;font-size:13px;padding:9px;border:1px dashed var(--l
 const CONFIG = {
   BUCKET: 'agenticaiworkshop20261026',        // S3 버킷 이름
   REGION: 'ap-northeast-2',                   // ★ 버킷의 실제 리전과 반드시 일치시키세요 (서울=ap-northeast-2)
-  ADMIN_PASS: '1026'                          // 담당자 암호 (원하는 값으로 변경)
+  ADMIN_PASS: '20211025'                          // 담당자 암호 (원하는 값으로 변경)
 };
 const BASE = `https://${CONFIG.BUCKET}.s3.${CONFIG.REGION}.amazonaws.com`;
 
@@ -307,7 +365,7 @@ async function fetchRoster(){
   const r = await s3Get('roster.json');
   if(!r) return [];
   const data = await r.json();
-  const list = (data.students||data||[]).map(s=>({name:s.name, email:s.email, id:s.id||idFromEmail(s.email)}));
+  const list = (data.students||data||[]).map(s=>({name:s.name, email:s.email, id:s.id||idFromEmail(s.email), creds:s.creds||null}));
   return assignFolders(list);
 }
 
@@ -332,6 +390,7 @@ function showApp(){
   $('gateView').classList.add('hide'); $('adminView').classList.add('hide');
   $('appView').classList.remove('hide');
   $('whoBox').innerHTML = `<b>${esc(CURRENT.name)}</b> 님 <span class="logout" onclick="logout()">로그아웃</span>`;
+  renderCredBox();
   loadRepo();
 }
 function logout(){ ssDel('cur'); location.reload(); }
@@ -345,29 +404,26 @@ async function loadRepo(){
     if(ROSTER.length===0){ body.innerHTML=''; empty.classList.remove('hide'); empty.textContent='아직 명단이 없습니다.'; $('repoSub').textContent=''; return; }
     empty.classList.add('hide');
     // 로그인 사용자의 폴더 동기화(세션 복원 대비)
-    if(CURRENT){ const me=ROSTER.find(x=>x.id===CURRENT.id); if(me){ CURRENT.folder=me.folder; } }
-    // 각 수강생 제출물({폴더}/submission.json)을 병렬 조회
-    const subs = await Promise.all(ROSTER.map(async s=>{
-      try{ const r=await s3Get(`${s.folder}/submission.json`); return r? await r.json():null; }catch{ return null; }
-    }));
-    let done=0;
-    body.innerHTML = ROSTER.map((s,i)=>{
-      const sub=subs[i]; const mine = CURRENT && s.id===CURRENT.id; if(sub) done++;
-      const imgUrl = sub&&sub.imageKey ? `${BASE}/${encKey(sub.imageKey)}` : '';
-      const zipUrl = sub&&sub.fileKey ? `${BASE}/${encKey(sub.fileKey)}` : '';
-      const shot = imgUrl ? `<div class="shot"><img src="${imgUrl}" onclick="zoom('${imgUrl}')"></div>` : '<span class="pending">미제출</span>';
-      const zip = zipUrl ? `<a class="dlink" href="${zipUrl}" download>⬇ 다운로드</a>` : '<span class="pending">미제출</span>';
-      const btn = mine ? `<button class="rowbtn" onclick="openModal()">${sub?'수정':'제출'}</button>` : `<button class="rowbtn disabled" title="본인만 제출할 수 있습니다">—</button>`;
-      return `<tr>
-        <td class="nm">${esc(s.name)}${mine?'<span class="me">나</span>':''}</td>
+    if(CURRENT){ const me=ROSTER.find(x=>x.id===CURRENT.id); if(me){ CURRENT.folder=me.folder; CURRENT.creds=me.creds||null; } }
+    renderCredBox();
+    // 본인 제출물만 조회/표시 (전체 현황은 담당자 화면에서만)
+    const me = CURRENT ? ROSTER.find(x=>x.id===CURRENT.id) : null;
+    if(!me){ body.innerHTML=''; empty.classList.remove('hide'); empty.textContent='명단에서 본인을 찾을 수 없습니다.'; $('repoSub').textContent=''; return; }
+    let sub=null;
+    try{ const r=await s3Get(`${me.folder}/submission.json`); if(r) sub=await r.json(); }catch{}
+    const imgUrl = sub&&sub.imageKey ? `${BASE}/${encKey(sub.imageKey)}` : '';
+    const zipUrl = sub&&sub.fileKey ? `${BASE}/${encKey(sub.fileKey)}` : '';
+    const shot = imgUrl ? `<div class="shot"><img src="${imgUrl}" onclick="zoom('${imgUrl}')"></div>` : '<span class="pending">미제출</span>';
+    const zip = zipUrl ? `<a class="dlink" href="${zipUrl}" download>⬇ 다운로드</a>` : '<span class="pending">미제출</span>';
+    body.innerHTML = `<tr>
+        <td class="nm">${esc(me.name)}<span class="me">나</span></td>
         <td class="proj">${sub?esc(sub.project||''):'<span class="pending">미제출</span>'}</td>
         <td class="desc">${sub?esc(sub.desc||''):''}</td>
         <td>${shot}</td>
         <td>${zip}</td>
-        <td>${btn}</td>
+        <td><button class="rowbtn" onclick="openModal()">${sub?'수정':'제출'}</button></td>
       </tr>`;
-    }).join('');
-    $('repoSub').textContent = `총 ${ROSTER.length}명 중 ${done}명 제출 완료`;
+    $('repoSub').textContent = sub ? '제출 완료 — 아래에서 내용을 수정할 수 있습니다.' : '아직 제출하지 않았습니다. 오른쪽 제출 버튼을 눌러 등록하세요.';
   }catch(e){ $('repoSub').textContent='오류: '+e.message; }
 }
 function zoom(src){ $('lbImg').src=src; $('lightbox').classList.remove('hide'); }
@@ -418,7 +474,7 @@ async function submitProject(){
 function openAdminGate(){ $('adminGate').classList.remove('hide'); $('adminMsg').textContent=''; }
 function enterAdmin(){
   const entered = ($('adminPass').value||'').trim();
-  if(entered===String(CONFIG.ADMIN_PASS).trim()){ $('adminGate').classList.add('hide'); $('gateView').classList.add('hide'); $('appView').classList.add('hide'); $('adminView').classList.remove('hide'); renderRosterEditor(); }
+  if(entered===String(CONFIG.ADMIN_PASS).trim()){ $('adminGate').classList.add('hide'); $('gateView').classList.add('hide'); $('appView').classList.add('hide'); $('adminView').classList.remove('hide'); renderRosterEditor(); loadAdminRepo(); }
   else $('adminMsg').textContent='암호가 올바르지 않습니다. (입력값: '+entered.length+'자)';
 }
 function backToApp(){ $('adminView').classList.add('hide'); if(CURRENT) showApp(); else $('gateView').classList.remove('hide'); }
@@ -429,7 +485,32 @@ function renderRosterEditor(){
   $('rosterBtn').disabled = EDITING.length===0;
   const box=$('rosterList');
   if(EDITING.length===0){ box.innerHTML='<div class="rempty">아직 추가된 수강생이 없습니다.</div>'; return; }
-  box.innerHTML = EDITING.map((s,i)=>`<div class="ritem"><div class="ri-tx"><b>${esc(s.name)}</b><span>${esc(s.email)}</span></div><button class="ri-x" onclick="removeStudent(${i})" title="삭제">&times;</button></div>`).join('');
+  box.innerHTML = EDITING.map((s,i)=>{
+    const has = s.creds && s.creds.accessKeyId;
+    const badge = has? '<span class="credtag on">키 등록됨</span>' : '<span class="credtag off">키 없음</span>';
+    const c = s.creds||{};
+    return `<div class="ritem">
+      <div class="ri-tx"><b>${esc(s.name)}</b><span>${esc(s.email)}</span></div>
+      <div class="ri-act">${badge}
+        <button class="rowbtn" onclick="toggleCred(${i})">AWS 키</button>
+        <button class="ri-x" onclick="removeStudent(${i})" title="삭제">&times;</button>
+      </div>
+    </div>
+    <div class="crededit hide" id="ce${i}">
+      <div class="fld"><label>AWS_ACCESS_KEY_ID</label><input id="ce_ak${i}" type="text" value="${esc(c.accessKeyId||'')}" placeholder="ASIA..."></div>
+      <div class="fld"><label>AWS_SECRET_ACCESS_KEY</label><input id="ce_sk${i}" type="text" value="${esc(c.secretAccessKey||'')}" placeholder="...."></div>
+      <div class="fld"><label>AWS_SESSION_TOKEN</label><textarea id="ce_st${i}" style="min-height:64px" placeholder="....">${esc(c.sessionToken||'')}</textarea></div>
+      <button class="btn btn-primary" onclick="saveCred(${i})">이 수강생 키 반영</button>
+    </div>`;
+  }).join('');
+}
+function toggleCred(i){ const el=$('ce'+i); if(el) el.classList.toggle('hide'); }
+function saveCred(i){
+  const ak=$('ce_ak'+i).value.trim(), sk=$('ce_sk'+i).value.trim(), st=$('ce_st'+i).value.trim();
+  EDITING[i].creds = ak? {accessKeyId:ak, secretAccessKey:sk, sessionToken:st} : null;
+  renderRosterEditor();
+  const msg=$('rosterMsg'); msg.className='msg ok';
+  msg.textContent = `${EDITING[i].name} 님의 AWS 키를 반영했습니다. 아래 "명단 저장"을 눌러야 최종 저장됩니다.`;
 }
 function addStudent(){
   const name=$('mName').value.trim(), email=$('mEmail').value.trim().toLowerCase();
@@ -437,9 +518,11 @@ function addStudent(){
   if(!name||!email){ msg.className='msg err'; msg.textContent='이름과 이메일을 모두 입력하세요.'; return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ msg.className='msg err'; msg.textContent='이메일 형식이 올바르지 않습니다.'; return; }
   if(EDITING.some(s=>s.email===email)){ msg.className='msg err'; msg.textContent='이미 추가된 이메일입니다.'; return; }
-  EDITING.push({name, email, id:idFromEmail(email)});
-  $('mName').value=''; $('mEmail').value=''; $('mName').focus();
-  msg.className='msg ok'; msg.textContent=`${name} 님을 추가했습니다.`;
+  const ak=($('mAk').value||'').trim(), sk=($('mSk').value||'').trim(), st=($('mSt').value||'').trim();
+  const creds = ak? {accessKeyId:ak, secretAccessKey:sk, sessionToken:st} : null;
+  EDITING.push({name, email, id:idFromEmail(email), creds});
+  $('mName').value=''; $('mEmail').value=''; $('mAk').value=''; $('mSk').value=''; $('mSt').value=''; $('mName').focus();
+  msg.className='msg ok'; msg.textContent=`${name} 님을 추가했습니다.${creds?' (AWS 키 포함)':''}`;
   renderRosterEditor();
 }
 /* 수강생 폴더의 모든 객체(제출물 포함) 삭제 */
@@ -464,7 +547,7 @@ async function removeStudent(i){
     EDITING.splice(i,1);                     // 메모리 목록에서 제거
     renderRosterEditor();
     // roster.json 즉시 갱신(저장)
-    const payload = EDITING.map(x=>({name:x.name, email:x.email, id:x.id||idFromEmail(x.email)}));
+    const payload = EDITING.map(x=>({name:x.name, email:x.email, id:x.id||idFromEmail(x.email), creds:x.creds||null}));
     await s3PutText('roster.json', JSON.stringify({students:payload, updatedAt:new Date().toISOString()}, null, 2), 'application/json');
     msg.className='msg ok'; msg.textContent=`${s.name} 님을 삭제했습니다 — 명단과 S3 폴더("${folder}/")가 모두 삭제되었습니다.`;
   }catch(e){ msg.className='msg err'; msg.textContent='삭제 중 오류: '+e.message; renderRosterEditor(); }
@@ -474,7 +557,7 @@ async function saveRoster(){
   if(EDITING.length===0){ msg.className='msg err'; msg.textContent='먼저 수강생을 추가하세요.'; return; }
   $('rosterBtn').disabled=true; msg.textContent='저장 중…';
   try{
-    const payload = EDITING.map(s=>({name:s.name, email:s.email, id:s.id||idFromEmail(s.email)}));
+    const payload = EDITING.map(s=>({name:s.name, email:s.email, id:s.id||idFromEmail(s.email), creds:s.creds||null}));
     await s3PutText('roster.json', JSON.stringify({students:payload, updatedAt:new Date().toISOString()}, null, 2), 'application/json');
     msg.className='msg ok'; msg.textContent=`명단 ${payload.length}명을 저장했습니다. 수강생이 바로 접속할 수 있습니다.`;
   }catch(e){ msg.className='msg err'; msg.textContent=e.message; }
@@ -483,10 +566,94 @@ async function saveRoster(){
 async function loadRosterIntoEditor(){
   const msg=$('rosterMsg'); msg.className='msg'; msg.textContent='불러오는 중…';
   try{ const list=await fetchRoster();
-    EDITING = list.map(s=>({name:s.name, email:s.email, id:s.id}));
+    EDITING = list.map(s=>({name:s.name, email:s.email, id:s.id, creds:s.creds||null}));
     renderRosterEditor();
     msg.className='msg ok'; msg.textContent = list.length? `저장된 명단 ${list.length}명을 불러왔습니다. 수정 후 다시 저장하세요.` : '저장된 명단이 없습니다.';
   }catch(e){ msg.className='msg err'; msg.textContent='오류: '+e.message; }
+}
+
+/* ---------- 수강생: 내 AWS Access Code ---------- */
+let REVEAL=false;
+function mask(v){ v=v||''; if(v.length<=8) return '•'.repeat(v.length||4); return v.slice(0,4)+'•'.repeat(Math.max(4,v.length-8))+v.slice(-4); }
+function envLines(c){ return 'AWS_ACCESS_KEY_ID="'+(c.accessKeyId||'')+'"\n'
+  +'AWS_SECRET_ACCESS_KEY="'+(c.secretAccessKey||'')+'"\n'
+  +'AWS_SESSION_TOKEN="'+(c.sessionToken||'')+'"'; }
+function renderCredBox(){
+  const box=$('credBox'); if(!box) return;
+  const c = CURRENT && CURRENT.creds;
+  if(!c || !c.accessKeyId){
+    box.innerHTML = '<div class="credwrap pend"><h3>내 AWS Access Code</h3>'
+      +'<p class="credpend">강사가 아직 Access Code를 등록하지 않았습니다. 등록되면 이 화면에서 바로 확인·복사할 수 있습니다.</p></div>';
+    return;
+  }
+  const rows=[['AWS_ACCESS_KEY_ID',c.accessKeyId],['AWS_SECRET_ACCESS_KEY',c.secretAccessKey],['AWS_SESSION_TOKEN',c.sessionToken]];
+  box.innerHTML = '<div class="credwrap">'
+    +'<div class="credhead"><div><h3>내 AWS Access Code</h3>'
+    +'<p>실습 코드에서 <b>환경변수</b>로 사용하세요. 타이핑하지 말고 복사 버튼을 쓰면 오류가 없습니다. 이 값은 <b>발급 후 최대 3일간만</b> 유효합니다.</p></div>'
+    +'<div class="credact"><button class="btn btn-ghost" id="revBtn" onclick="toggleReveal()">'+(REVEAL?'값 가리기':'값 보기')+'</button>'
+    +'<button class="btn btn-primary" onclick="cpEnv()">.env 전체 복사</button></div></div>'
+    +'<div class="credrows">'
+    + rows.map((r,i)=>'<div class="credrow"><span class="ck">'+r[0]+'</span>'
+        +'<code class="cv">'+(REVEAL?esc(r[1]||''):mask(r[1]||''))+'</code>'
+        +'<button class="cpbtn" onclick="cpLine('+i+')">복사</button></div>').join('')
+    +'</div>'
+    +'<div class="credwarn">※ 공개 레포지토리 특성상 본인 외에도 보일 수 있는 임시 자격 증명입니다. 실습 종료 후 폐기됩니다. 코드에 하드코딩하지 말고 .env로만 사용하세요.</div>'
+    +'</div>';
+}
+function toggleReveal(){ REVEAL=!REVEAL; renderCredBox(); }
+function cpLine(i){
+  const c=CURRENT.creds; const ks=['accessKeyId','secretAccessKey','sessionToken'];
+  const ns=['AWS_ACCESS_KEY_ID','AWS_SECRET_ACCESS_KEY','AWS_SESSION_TOKEN'];
+  copyText(ns[i]+'="'+(c[ks[i]]||'')+'"', ns[i]+' 복사됨');
+}
+function cpEnv(){ copyText(envLines(CURRENT.creds), '.env 3줄 전체 복사됨'); }
+function copyText(t, ok){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(()=>toast(ok)).catch(()=>fallbackCopy(t,ok));
+  } else { fallbackCopy(t,ok); }
+}
+function fallbackCopy(t,ok){
+  try{ const ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast(ok); }
+  catch(e){ toast('복사 실패 — 길게 눌러 복사하세요'); }
+}
+function toast(t){
+  let el=$('toast'); if(!el){ el=document.createElement('div'); el.id='toast'; document.body.appendChild(el); }
+  el.textContent=t; el.className='toast show'; clearTimeout(window._tt); window._tt=setTimeout(()=>{el.className='toast';},1500);
+}
+
+/* ---------- 담당자: 전체 제출 현황 ---------- */
+async function loadAdminRepo(){
+  const body=$('adminRepoBody'), empty=$('adminRepoEmpty'), sub=$('adminRepoSub');
+  if(!body) return;
+  sub.textContent='불러오는 중…';
+  try{
+    const list = await fetchRoster();
+    if(list.length===0){ body.innerHTML=''; empty.classList.remove('hide'); empty.textContent='아직 명단이 없습니다.'; sub.textContent=''; return; }
+    empty.classList.add('hide');
+    const subs = await Promise.all(list.map(async s=>{
+      try{ const r=await s3Get(`${s.folder}/submission.json`); return r? await r.json():null; }catch{ return null; }
+    }));
+    let done=0;
+    body.innerHTML = list.map((s,i)=>{
+      const d=subs[i]; if(d) done++;
+      const hasKey = s.creds && s.creds.accessKeyId;
+      const keyTag = hasKey ? '<span class="credtag on">등록됨</span>' : '<span class="credtag off">없음</span>';
+      const imgUrl = d&&d.imageKey ? `${BASE}/${encKey(d.imageKey)}` : '';
+      const zipUrl = d&&d.fileKey ? `${BASE}/${encKey(d.fileKey)}` : '';
+      const shot = imgUrl ? `<div class="shot"><img src="${imgUrl}" onclick="zoom('${imgUrl}')"></div>` : '<span class="pending">미제출</span>';
+      const zip = zipUrl ? `<a class="dlink" href="${zipUrl}" download>⬇ 다운로드</a>` : '<span class="pending">미제출</span>';
+      return `<tr>
+        <td class="nm">${esc(s.name)}<br><span style="font-weight:600;color:var(--muted);font-size:11.5px">${esc(s.email)}</span></td>
+        <td>${keyTag}</td>
+        <td class="proj">${d?esc(d.project||''):'<span class="pending">미제출</span>'}</td>
+        <td class="desc">${d?esc(d.desc||''):''}</td>
+        <td>${shot}</td>
+        <td>${zip}</td>
+      </tr>`;
+    }).join('');
+    sub.textContent = `총 ${list.length}명 중 ${done}명 제출 완료`;
+  }catch(e){ sub.textContent='오류: '+e.message; }
 }
 
 /* ---------- 세션 복원 ---------- */
