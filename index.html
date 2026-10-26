@@ -179,6 +179,25 @@ input[type=file]{width:100%;font-size:13px;padding:9px;border:1px dashed var(--l
     <div id="credBox"></div>
     <div class="bar">
       <div>
+        <h2>공유 자료</h2>
+        <div class="sub" id="shareSub">불러오는 중…</div>
+      </div>
+      <button class="btn btn-ghost" onclick="loadShare()">새로고침</button>
+    </div>
+    <div class="card" style="margin-bottom:28px">
+      <table>
+        <thead><tr>
+          <th style="width:52%">파일 이름</th>
+          <th style="width:14%">크기</th>
+          <th style="width:20%">올린 날짜</th>
+          <th style="width:14%"></th>
+        </tr></thead>
+        <tbody id="shareBody"></tbody>
+      </table>
+      <div class="empty hide" id="shareEmpty"></div>
+    </div>
+    <div class="bar">
+      <div>
         <h2>내 제출</h2>
         <div class="sub" id="repoSub">불러오는 중…</div>
       </div>
@@ -237,6 +256,30 @@ input[type=file]{width:100%;font-size:13px;padding:9px;border:1px dashed var(--l
       </div>
     </div>
 
+    <div class="panel" style="margin-top:18px">
+      <div class="bar" style="margin-bottom:10px">
+        <div><h3 style="font-size:16px;margin:0">3. 공유 자료 (share 폴더)</h3>
+        <p style="margin:3px 0 0;font-size:12.5px;color:var(--muted)">여기에 올린 파일은 로그인한 모든 수강생이 다운로드할 수 있습니다. 같은 이름의 파일을 올리면 확인 후 교체됩니다.</p></div>
+        <button class="btn btn-ghost" onclick="loadAdminShare()">새로고침</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <input type="file" id="shareFiles" multiple>
+        <button class="btn btn-primary" id="shareBtn" onclick="uploadShare()">업로드</button>
+      </div>
+      <div class="msg" id="shareMsg"></div>
+      <div class="card">
+        <table>
+          <thead><tr>
+            <th style="width:50%">파일 이름</th>
+            <th style="width:13%">크기</th>
+            <th style="width:20%">올린 날짜</th>
+            <th style="width:17%"></th>
+          </tr></thead>
+          <tbody id="adminShareBody"></tbody>
+        </table>
+        <div class="empty hide" id="adminShareEmpty"></div>
+      </div>
+    </div>
     <div class="panel" style="margin-top:18px">
       <div class="bar" style="margin-bottom:10px">
         <div><h3 style="font-size:16px;margin:0">전체 제출 현황</h3>
@@ -313,6 +356,10 @@ const CONFIG = {
   ADMIN_PASS: '20211025'                          // 담당자 암호 (원하는 값으로 변경)
 };
 const BASE = `https://${CONFIG.BUCKET}.s3.${CONFIG.REGION}.amazonaws.com`;
+/* 공유 자료 폴더 */
+const SHARE_DIR='share';
+const SHARE_INDEX=SHARE_DIR+'/index.json';
+let SHARE_LAST_COUNT=0;
 
 /* ---------- 유틸 ---------- */
 const $ = id => document.getElementById(id);
@@ -354,7 +401,7 @@ async function s3Delete(key){
 }
 /* 명단 목록에 이름 기반 폴더 접두어 부여(동명이인은 이메일 id로 구분) */
 function assignFolders(list){
-  list.forEach(s=>{ s.folder = folderFromName(s.name, s.id); });
+  list.forEach(s=>{ s.folder = folderFromName(s.name, s.id); if(s.folder.toLowerCase()===SHARE_DIR) s.folder = s.folder+'_'+s.id; });
   const cnt={}; list.forEach(s=>cnt[s.folder]=(cnt[s.folder]||0)+1);
   list.forEach(s=>{ if(cnt[s.folder]>1) s.folder = s.folder+'_'+s.id; });
   return list;
@@ -391,6 +438,7 @@ function showApp(){
   $('appView').classList.remove('hide');
   $('whoBox').innerHTML = `<b>${esc(CURRENT.name)}</b> 님 <span class="logout" onclick="logout()">로그아웃</span>`;
   renderCredBox();
+  loadShare();
   loadRepo();
 }
 function logout(){ ssDel('cur'); location.reload(); }
@@ -474,7 +522,7 @@ async function submitProject(){
 function openAdminGate(){ $('adminGate').classList.remove('hide'); $('adminMsg').textContent=''; }
 function enterAdmin(){
   const entered = ($('adminPass').value||'').trim();
-  if(entered===String(CONFIG.ADMIN_PASS).trim()){ $('adminGate').classList.add('hide'); $('gateView').classList.add('hide'); $('appView').classList.add('hide'); $('adminView').classList.remove('hide'); loadRosterIntoEditor(); loadAdminRepo(); }
+  if(entered===String(CONFIG.ADMIN_PASS).trim()){ $('adminGate').classList.add('hide'); $('gateView').classList.add('hide'); $('appView').classList.add('hide'); $('adminView').classList.remove('hide'); loadRosterIntoEditor(); loadAdminShare(); loadAdminRepo(); }
   else $('adminMsg').textContent='암호가 올바르지 않습니다. (입력값: '+entered.length+'자)';
 }
 function backToApp(){ $('adminView').classList.add('hide'); if(CURRENT) showApp(); else $('gateView').classList.remove('hide'); }
@@ -562,43 +610,67 @@ async function deleteStudentFolder(folder){
 }
 async function removeStudent(i){
   const s = EDITING[i]; if(!s) return;
-  let ok=true; try{ ok=confirm(`${s.name} 님을 명단에서 삭제하고, S3의 해당 폴더(제출물 포함)도 삭제합니다.\n이 작업은 되돌릴 수 없습니다. 계속할까요?`); }catch{ ok=true; }
+  let ok=false; try{ ok=confirm(`${s.name} 님을 명단에서 삭제하고, S3의 해당 폴더(제출물 포함)도 삭제합니다.\n이 작업은 되돌릴 수 없습니다. 계속할까요?`); }catch{ ok=false; }
   if(!ok) return;
-  const msg=$('rosterMsg'); msg.className='msg'; msg.textContent=`${s.name} 님의 폴더를 삭제하는 중…`;
+  const msg=$('rosterMsg'); msg.className='msg'; msg.textContent=`${s.name} 님을 삭제하는 중…`;
   try{
-    assignFolders(EDITING);                 // 현재 목록 기준으로 폴더명 확정
-    const folder = EDITING[i].folder;
-    await deleteStudentFolder(folder);       // S3 폴더(객체들) 삭제
-    EDITING.splice(i,1);                     // 메모리 목록에서 제거
-    renderRosterEditor();
-    // roster.json 즉시 갱신(저장)
-    const payload = EDITING.map(x=>({name:x.name, email:x.email, id:x.id||idFromEmail(x.email), creds:x.creds||null}));
+    // 1) S3 최신 명단을 다시 읽는다 — 실패하면 아무것도 삭제하지 않음
+    const existing = await readRosterStrict();
+    const key = String(s.email||'').toLowerCase();
+    const latest = existing.map(x=>({name:x.name, email:x.email, id:x.id||idFromEmail(x.email), creds:x.creds||null}));
+    assignFolders(latest);
+    const target = latest.find(x=>String(x.email||'').toLowerCase()===key);
+    // 2) 이 한 명만 명단에서 제외 (다른 사람은 그대로 유지)
+    const payload = latest.filter(x=>String(x.email||'').toLowerCase()!==key).map(x=>({name:x.name, email:x.email, id:x.id, creds:x.creds}));
     await s3PutText('roster.json', JSON.stringify({students:payload, updatedAt:new Date().toISOString()}, null, 2), 'application/json');
-    msg.className='msg ok'; msg.textContent=`${s.name} 님을 삭제했습니다 — 명단과 S3 폴더("${folder}/")가 모두 삭제되었습니다.`;
-  }catch(e){ msg.className='msg err'; msg.textContent='삭제 중 오류: '+e.message; renderRosterEditor(); }
+    LAST_KNOWN_COUNT = payload.length;
+    // 3) 담당자가 지운 그 한 명의 폴더만 삭제
+    let folder='';
+    if(target){ folder = target.folder; await deleteStudentFolder(folder); }
+    EDITING = EDITING.filter(x=>String(x.email||'').toLowerCase()!==key);
+    renderRosterEditor();
+    msg.className='msg ok'; msg.textContent = folder ? `${s.name} 님을 삭제했습니다 — 명단과 S3 폴더("${folder}/")가 삭제되었습니다. 현재 명단 ${payload.length}명.` : `${s.name} 님을 목록에서 제거했습니다(저장된 명단에는 없던 항목). 현재 명단 ${payload.length}명.`;
+  }catch(e){ msg.className='msg err'; msg.textContent='삭제 중단: '+e.message; renderRosterEditor(); }
+}
+const APP_VERSION='2026-10-27a';   // 담당자 화면에 표시 — 이 값이 안 보이면 이전 페이지(캐시)입니다
+let LAST_KNOWN_COUNT=0;            // 마지막으로 S3에서 확인한 명단 수
+/* S3 명단을 엄격하게 읽기: 읽기·해석 실패 시 예외를 던져 저장을 중단시킨다 */
+async function readRosterStrict(){
+  const r = await fetch(`${BASE}/${encKey('roster.json')}?t=${Date.now()}`, {cache:'no-store'});
+  if(r.status===404||r.status===403){
+    if(LAST_KNOWN_COUNT>0) throw new Error(`S3 명단을 확인할 수 없어 저장을 중단했습니다(${r.status}). 기존 명단 보호를 위해 아무것도 저장하지 않았습니다. 새로고침 후 다시 시도하세요.`);
+    return [];
+  }
+  if(!r.ok) throw new Error(`S3 명단 읽기 실패(${r.status}) — 기존 명단 보호를 위해 저장을 중단했습니다.`);
+  let d; try{ d = await r.json(); }catch(e){ throw new Error('S3 명단 형식 오류 — 기존 명단 보호를 위해 저장을 중단했습니다.'); }
+  const list = Array.isArray(d) ? d : d.students;
+  if(!Array.isArray(list)) throw new Error('S3 명단 형식 오류 — 기존 명단 보호를 위해 저장을 중단했습니다.');
+  LAST_KNOWN_COUNT = Math.max(LAST_KNOWN_COUNT, list.length);
+  return list;
 }
 async function saveRoster(){
   const msg=$('rosterMsg'); msg.className='msg';
   if(EDITING.length===0){ msg.className='msg err'; msg.textContent='먼저 수강생을 추가하세요.'; return; }
   $('rosterBtn').disabled=true; msg.textContent='기존 명단과 병합하여 저장 중…';
   try{
-    // 1) S3의 최신 명단을 다시 읽어온다 (덮어쓰기 방지의 핵심)
-    let existing=[];
-    try{ const r=await s3Get('roster.json'); if(r){ const d=await r.json(); existing=(d.students||d||[]); } }catch(e){}
-    // 2) 이메일 기준 병합(upsert) — 기존 항목은 절대 삭제하지 않음
+    // 1) S3 최신 명단을 다시 읽는다 — 실패하면 예외로 저장 중단(덮어쓰기 방지)
+    const existing = await readRosterStrict();
+    // 2) 이메일 기준 병합(upsert) — 기존 항목은 절대 제거하지 않음
     const byEmail=new Map();
     existing.forEach(s=>{ if(s&&s.email) byEmail.set(String(s.email).toLowerCase(), {name:s.name, email:s.email, id:s.id||idFromEmail(s.email), creds:s.creds||null}); });
     let added=0, updated=0;
     EDITING.forEach(s=>{
       const key=String(s.email||'').toLowerCase(); if(!key) return;
       const prev=byEmail.get(key);
-      const rec={name:s.name, email:s.email, id:s.id||idFromEmail(s.email), creds:(s.creds||(prev&&prev.creds)||null)};
-      if(prev){ byEmail.set(key, rec); updated++; } else { byEmail.set(key, rec); added++; }
+      byEmail.set(key, {name:s.name, email:s.email, id:s.id||idFromEmail(s.email), creds:(s.creds||(prev&&prev.creds)||null)});
+      if(prev) updated++; else added++;
     });
     const payload=Array.from(byEmail.values());
-    // 3) 저장
+    // 3) 안전장치: 저장 결과가 기존보다 적으면 저장하지 않음
+    if(payload.length < existing.length) throw new Error('저장 결과가 기존 명단보다 적어 저장을 중단했습니다.');
     await s3PutText('roster.json', JSON.stringify({students:payload, updatedAt:new Date().toISOString()}, null, 2), 'application/json');
-    // 4) 저장된 전체 명단을 에디터에 반영
+    LAST_KNOWN_COUNT = payload.length;
+    // 4) 저장된 전체 명단을 화면에 반영
     EDITING=payload.map(s=>({name:s.name, email:s.email, id:s.id, creds:s.creds||null}));
     renderRosterEditor();
     msg.className='msg ok'; msg.textContent=`저장 완료 — 신규 ${added}명 추가, ${updated}명 갱신. 현재 명단 총 ${payload.length}명 (기존 명단은 그대로 유지됩니다).`;
@@ -608,9 +680,12 @@ async function saveRoster(){
 async function loadRosterIntoEditor(){
   const msg=$('rosterMsg'); msg.className='msg'; msg.textContent='불러오는 중…';
   try{ const list=await fetchRoster();
-    EDITING = list.map(s=>({name:s.name, email:s.email, id:s.id, creds:s.creds||null}));
+    LAST_KNOWN_COUNT = Math.max(LAST_KNOWN_COUNT, list.length);
+    // 이미 화면에 입력 중인 항목이 있으면 버리지 않고 합친다
+    const pending = EDITING.filter(e=>!list.some(s=>String(s.email).toLowerCase()===String(e.email).toLowerCase()));
+    EDITING = list.map(s=>({name:s.name, email:s.email, id:s.id, creds:s.creds||null})).concat(pending);
     renderRosterEditor();
-    msg.className='msg ok'; msg.textContent = list.length? `저장된 명단 ${list.length}명을 불러왔습니다. 수정 후 다시 저장하세요.` : '저장된 명단이 없습니다.';
+    msg.className='msg ok'; msg.textContent = (list.length? `저장된 명단 ${list.length}명을 불러왔습니다.` : '저장된 명단이 없습니다.') + ` (버전 ${APP_VERSION})`;
   }catch(e){ msg.className='msg err'; msg.textContent='오류: '+e.message; }
 }
 
@@ -700,6 +775,126 @@ async function loadAdminRepo(){
 
 /* ---------- 세션 복원 ---------- */
 (function(){ const c=ssGet('cur'); if(c){ try{ CURRENT=JSON.parse(c); showApp(); }catch{} } })();
+
+/* ============================================================
+   공유 자료(share 폴더)
+   - 버킷 목록 조회가 막혀 있으므로 share/index.json에 파일 목록을 관리
+   - 목록을 읽지 못하면 저장을 중단(기존 목록 보호)
+   ============================================================ */
+function fmtSize(n){ n=Number(n)||0; if(n<1024) return n+' B'; if(n<1048576) return (n/1024).toFixed(1)+' KB'; if(n<1073741824) return (n/1048576).toFixed(1)+' MB'; return (n/1073741824).toFixed(2)+' GB'; }
+function fmtDate(s){ try{ const d=new Date(s); return d.toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch{ return ''; } }
+function shareSafeName(name){ return (name||'').replace(/[\\/]+/g,'_').replace(/[\u0000-\u001f]/g,'').trim() || ('file_'+Date.now()); }
+/* 공유 목록 읽기(엄격) — 실패 시 예외 */
+async function readShareStrict(){
+  const r = await fetch(`${BASE}/${encKey(SHARE_INDEX)}?t=${Date.now()}`, {cache:'no-store'});
+  if(r.status===404||r.status===403){
+    if(SHARE_LAST_COUNT>0) throw new Error(`공유 목록을 확인할 수 없어 중단했습니다(${r.status}). 기존 공유 목록 보호를 위해 아무것도 저장하지 않았습니다. 새로고침 후 다시 시도하세요.`);
+    return [];
+  }
+  if(!r.ok) throw new Error(`공유 목록 읽기 실패(${r.status}) — 기존 목록 보호를 위해 중단했습니다.`);
+  let d; try{ d=await r.json(); }catch(e){ throw new Error('공유 목록 형식 오류 — 기존 목록 보호를 위해 중단했습니다.'); }
+  const list = Array.isArray(d) ? d : d.files;
+  if(!Array.isArray(list)) throw new Error('공유 목록 형식 오류 — 기존 목록 보호를 위해 중단했습니다.');
+  SHARE_LAST_COUNT = Math.max(SHARE_LAST_COUNT, list.length);
+  return list;
+}
+/* 화면 표시용 읽기(관대) */
+async function readShareLoose(){
+  try{ const r=await fetch(`${BASE}/${encKey(SHARE_INDEX)}?t=${Date.now()}`, {cache:'no-store'}); if(!r.ok) return []; const d=await r.json(); const l=Array.isArray(d)?d:d.files; return Array.isArray(l)?l:[]; }catch{ return []; }
+}
+function shareRows(list, admin){
+  return list.slice().sort((a,b)=>String(b.uploadedAt||'').localeCompare(String(a.uploadedAt||''))).map(f=>{
+    const k=encodeURIComponent(f.key);
+    const act = `<button class="rowbtn" onclick="downloadShare(decodeURIComponent('${k}'))">다운로드</button>` + (admin? ` <button class="ri-x" title="삭제" onclick="deleteShare(decodeURIComponent('${k}'))">&times;</button>`:'');
+    return `<tr><td><b>${esc(f.name)}</b></td><td>${fmtSize(f.size)}</td><td>${esc(fmtDate(f.uploadedAt))}</td><td style="white-space:nowrap">${act}</td></tr>`;
+  }).join('');
+}
+/* 수강생 화면 */
+async function loadShare(){
+  const body=$('shareBody'), empty=$('shareEmpty'), sub=$('shareSub'); if(!body) return;
+  sub.textContent='불러오는 중…';
+  const list=await readShareLoose();
+  if(list.length===0){ body.innerHTML=''; empty.classList.remove('hide'); empty.textContent='아직 공유된 자료가 없습니다.'; sub.textContent=''; return; }
+  empty.classList.add('hide'); body.innerHTML=shareRows(list,false);
+  sub.textContent=`담당자가 공유한 자료 ${list.length}개`;
+}
+/* 담당자 화면 */
+async function loadAdminShare(){
+  const body=$('adminShareBody'), empty=$('adminShareEmpty'); if(!body) return;
+  let list=[];
+  try{ list=await readShareStrict(); }catch(e){ $('shareMsg').className='msg err'; $('shareMsg').textContent=e.message; list=await readShareLoose(); }
+  if(list.length===0){ body.innerHTML=''; empty.classList.remove('hide'); empty.textContent='아직 공유한 파일이 없습니다.'; return; }
+  empty.classList.add('hide'); body.innerHTML=shareRows(list,true);
+}
+async function uploadShare(){
+  const input=$('shareFiles'), msg=$('shareMsg'); msg.className='msg';
+  const files=Array.from(input.files||[]);
+  if(files.length===0){ msg.className='msg err'; msg.textContent='업로드할 파일을 선택하세요.'; return; }
+  $('shareBtn').disabled=true;
+  try{
+    // 1) 기존 목록 확인 — 실패하면 아무것도 올리지 않음
+    const existing = await readShareStrict();
+    const byKey=new Map(existing.map(f=>[f.key,f]));
+    // 2) 같은 이름이 있으면 교체 여부 확인
+    const dup=files.map(f=>shareSafeName(f.name)).filter(n=>byKey.has(`${SHARE_DIR}/${n}`));
+    if(dup.length){
+      let ok=false; try{ ok=confirm(`같은 이름의 파일이 이미 있습니다:\n- ${dup.join('\n- ')}\n\n새 파일로 교체할까요?`); }catch{ ok=false; }
+      if(!ok){ msg.className='msg err'; msg.textContent='업로드를 취소했습니다.'; return; }
+    }
+    // 3) 파일 업로드
+    const done=[], failed=[];
+    for(let i=0;i<files.length;i++){
+      const f=files[i], name=shareSafeName(f.name), key=`${SHARE_DIR}/${name}`;
+      msg.textContent=`업로드 중… (${i+1}/${files.length}) ${name}`;
+      try{ await s3PutFile(key,f); done.push({key, name, size:f.size, type:f.type||'', uploadedAt:new Date().toISOString()}); }
+      catch(e){ failed.push(name); }
+    }
+    // 4) 목록 갱신 — 저장 직전에 다시 읽어서 병합(기존 항목은 유지)
+    if(done.length){
+      const latest = await readShareStrict();
+      const m=new Map(latest.map(f=>[f.key,f]));
+      done.forEach(f=>m.set(f.key,f));
+      const files2=Array.from(m.values());
+      if(files2.length < latest.length) throw new Error('목록이 줄어드는 저장이라 중단했습니다.');
+      await s3PutText(SHARE_INDEX, JSON.stringify({files:files2, updatedAt:new Date().toISOString()}, null, 2), 'application/json');
+      SHARE_LAST_COUNT=files2.length;
+    }
+    input.value='';
+    msg.className = failed.length? 'msg err' : 'msg ok';
+    msg.textContent = `업로드 완료 ${done.length}개` + (failed.length? ` · 실패 ${failed.length}개: ${failed.join(', ')}` : '') + ' — 수강생 화면에 바로 표시됩니다.';
+    loadAdminShare();
+  }catch(e){ msg.className='msg err'; msg.textContent=e.message; }
+  finally{ $('shareBtn').disabled=false; }
+}
+async function deleteShare(key){
+  const msg=$('shareMsg'); msg.className='msg';
+  const name=key.split('/').pop();
+  let ok=false; try{ ok=confirm(`공유 자료 "${name}"을(를) 삭제합니다.\n수강생도 더 이상 다운로드할 수 없습니다. 계속할까요?`); }catch{ ok=false; }
+  if(!ok) return;
+  try{
+    const latest = await readShareStrict();
+    const files2 = latest.filter(f=>f.key!==key);
+    await s3PutText(SHARE_INDEX, JSON.stringify({files:files2, updatedAt:new Date().toISOString()}, null, 2), 'application/json');
+    SHARE_LAST_COUNT=files2.length;
+    await s3Delete(key);
+    msg.className='msg ok'; msg.textContent=`"${name}"을(를) 삭제했습니다.`;
+    loadAdminShare();
+  }catch(e){ msg.className='msg err'; msg.textContent='삭제 중단: '+e.message; }
+}
+/* 다운로드 — 원래 파일 이름으로 저장 */
+async function downloadShare(key){
+  const name=key.split('/').pop();
+  const url=`${BASE}/${encKey(key)}`;
+  try{
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const blob=await r.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  }catch(e){ window.open(url,'_blank'); }
+}
 </script>
 </body>
 </html>
