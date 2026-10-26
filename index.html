@@ -474,7 +474,7 @@ async function submitProject(){
 function openAdminGate(){ $('adminGate').classList.remove('hide'); $('adminMsg').textContent=''; }
 function enterAdmin(){
   const entered = ($('adminPass').value||'').trim();
-  if(entered===String(CONFIG.ADMIN_PASS).trim()){ $('adminGate').classList.add('hide'); $('gateView').classList.add('hide'); $('appView').classList.add('hide'); $('adminView').classList.remove('hide'); renderRosterEditor(); loadAdminRepo(); }
+  if(entered===String(CONFIG.ADMIN_PASS).trim()){ $('adminGate').classList.add('hide'); $('gateView').classList.add('hide'); $('appView').classList.add('hide'); $('adminView').classList.remove('hide'); loadRosterIntoEditor(); loadAdminRepo(); }
   else $('adminMsg').textContent='암호가 올바르지 않습니다. (입력값: '+entered.length+'자)';
 }
 function backToApp(){ $('adminView').classList.add('hide'); if(CURRENT) showApp(); else $('gateView').classList.remove('hide'); }
@@ -580,11 +580,28 @@ async function removeStudent(i){
 async function saveRoster(){
   const msg=$('rosterMsg'); msg.className='msg';
   if(EDITING.length===0){ msg.className='msg err'; msg.textContent='먼저 수강생을 추가하세요.'; return; }
-  $('rosterBtn').disabled=true; msg.textContent='저장 중…';
+  $('rosterBtn').disabled=true; msg.textContent='기존 명단과 병합하여 저장 중…';
   try{
-    const payload = EDITING.map(s=>({name:s.name, email:s.email, id:s.id||idFromEmail(s.email), creds:s.creds||null}));
+    // 1) S3의 최신 명단을 다시 읽어온다 (덮어쓰기 방지의 핵심)
+    let existing=[];
+    try{ const r=await s3Get('roster.json'); if(r){ const d=await r.json(); existing=(d.students||d||[]); } }catch(e){}
+    // 2) 이메일 기준 병합(upsert) — 기존 항목은 절대 삭제하지 않음
+    const byEmail=new Map();
+    existing.forEach(s=>{ if(s&&s.email) byEmail.set(String(s.email).toLowerCase(), {name:s.name, email:s.email, id:s.id||idFromEmail(s.email), creds:s.creds||null}); });
+    let added=0, updated=0;
+    EDITING.forEach(s=>{
+      const key=String(s.email||'').toLowerCase(); if(!key) return;
+      const prev=byEmail.get(key);
+      const rec={name:s.name, email:s.email, id:s.id||idFromEmail(s.email), creds:(s.creds||(prev&&prev.creds)||null)};
+      if(prev){ byEmail.set(key, rec); updated++; } else { byEmail.set(key, rec); added++; }
+    });
+    const payload=Array.from(byEmail.values());
+    // 3) 저장
     await s3PutText('roster.json', JSON.stringify({students:payload, updatedAt:new Date().toISOString()}, null, 2), 'application/json');
-    msg.className='msg ok'; msg.textContent=`명단 ${payload.length}명을 저장했습니다. 수강생이 바로 접속할 수 있습니다.`;
+    // 4) 저장된 전체 명단을 에디터에 반영
+    EDITING=payload.map(s=>({name:s.name, email:s.email, id:s.id, creds:s.creds||null}));
+    renderRosterEditor();
+    msg.className='msg ok'; msg.textContent=`저장 완료 — 신규 ${added}명 추가, ${updated}명 갱신. 현재 명단 총 ${payload.length}명 (기존 명단은 그대로 유지됩니다).`;
   }catch(e){ msg.className='msg err'; msg.textContent=e.message; }
   finally{ $('rosterBtn').disabled=false; }
 }
